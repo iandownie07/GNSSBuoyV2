@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# STM32CubeIDE
+.metadata/
+.settings/
+Debug/
+Release/
+*.launch
+
+# Build artifacts
+build/
+*.o
+*.elf
+*.map
+*.hex
+*.bin
+
+# Editors
+*.swp
+*.swo
