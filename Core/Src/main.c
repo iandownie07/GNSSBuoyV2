@@ -108,7 +108,7 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */  
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -177,12 +177,16 @@ int main(void)
 
   handles.hrtc = &hrtc;
   //handles.CT_uart = &huart4;
-  handles.Iridium_uart = &huart3;
+  handles.BLE_uart = &huart3; // Use uart3 temporarily for BLE
+  //handles.Iridium_uart = &huart3;
   handles.GNSS_uart = &hlpuart1;
+  handles.BLE_dma_handle = &handle_GPDMA1_Channel2; // Use GPDMA1_Channel1 temporarily for BLE
+  // in hal_msp, config changed to handle_GPDMA1_Channel2.Init.SrcInc = DMA_SINC_INCREMENTED; 
+  // DMA_SINC_FIXED for Iridium
   //handles.CT_dma_handle = &handle_GPDMA1_Channel1;
   handles.GNSS_dma_handle = &handle_GPDMA1_Channel0;
-  handles.Iridium_tx_dma_handle = &handle_GPDMA1_Channel2;
-  handles.Iridium_rx_dma_handle = &handle_GPDMA1_Channel3;
+  //handles.Iridium_tx_dma_handle = &handle_GPDMA1_Channel2;
+  //handles.Iridium_rx_dma_handle = &handle_GPDMA1_Channel3;
   handles.iridium_timer = &htim17;
   handles.gnss_timer = &htim16;
   handles.reset_reason = reset_reason;
@@ -191,6 +195,7 @@ int main(void)
 
   MX_ThreadX_Init(&handles);
   /* USER CODE END 2 */
+
 
 
   /* We should never get here as control is now taken by the scheduler */
@@ -457,7 +462,7 @@ static void MX_LPUART1_UART_Init(void)
 
   /* USER CODE END LPUART1_Init 1 */
   hlpuart1.Instance = LPUART1;
-  hlpuart1.Init.BaudRate = 9600; //GNSS 38400 (aliexpress) or 9600 (my board) CHANGE IN GNSS.H TOO!!
+  hlpuart1.Init.BaudRate = 38400;
   hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
   hlpuart1.Init.StopBits = UART_STOPBITS_1;
   hlpuart1.Init.Parity = UART_PARITY_NONE;
@@ -648,7 +653,7 @@ static void MX_USART3_UART_Init(void)
 
   /* USER CODE END USART3_Init 1 */
   huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
+  huart3.Init.BaudRate = 9600;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;
@@ -1051,21 +1056,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-      // LD1 - PC7
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-    // LD2 - PB7
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-    // LD3 - PG2
-    GPIO_InitStruct.Pin = GPIO_PIN_2;
-    HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
 }
 
 /* USER CODE BEGIN 4 */
@@ -1138,14 +1128,6 @@ void Process_MON_VER_Response(uint8_t *data, uint16_t len) {
 }*/
 /* USER CODE END 4 */
 
-/**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM4 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
 
 /**
   * @brief  This function is executed in case of error occurrence.

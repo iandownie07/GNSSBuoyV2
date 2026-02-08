@@ -20,38 +20,6 @@ static void get_checksum(uint8_t* ck_a, uint8_t* ck_b, uint8_t* buffer,
 static uint32_t get_timestamp(GNSS* self)__attribute__((unused));
 static void reset_struct_fields(GNSS* self)__attribute__((unused));
 
-/*
-void Process_MON_VER_Response(uint8_t *data, uint16_t len) {
-    // Check for valid MON-VER response
-    if (len < 10) {
-        printf("Response too short\n");
-        return;
-    }
-
-    // Check if the response starts with the sync chars
-    if (data[0] != 0xB5 || data[1] != 0x62) {
-        printf("Invalid response header\n");
-        return;
-    }
-
-    // Validate the class and ID
-    if (data[2] != 0x0A || data[3] != 0x04) {
-        printf("Not a MON-VER response\n");
-        return;
-    }
-
-    // Length of the payload
-    uint16_t payload_length = (data[4] | (data[5] << 8));
-
-    // Process version information from the payload
-    printf("MON-VER Response:\n");
-    for (int i = 6; i < 6 + payload_length; i++) {
-        printf("%02X ", data[i]);
-    }
-    printf("\n");
-}
-*/
-
 /**
  * Initialize the GNSS struct
  *
@@ -229,6 +197,7 @@ void gnss_process_message(GNSS* self)
 	int8_t pDOP;
 	int16_t numSV;
 	bool is_ubx_nav_pvt_msg, velocities_exceed_max, sAcc_exceeded_max;
+	UINT status;
 	
 	// Really gross for loop that processes msgs in each iteration
 	for (num_payload_bytes = uUbxProtocolDecode(buf_start, buf_length,
@@ -269,17 +238,47 @@ void gnss_process_message(GNSS* self)
 		//printf("PDOP %d\n", pDOP);
 		//printf("numSV %d\n", numSV);
 		//printf("sAcc %d\n", sAcc);
-		printf("#START\n");
-		printf("%ld\n", vnorth);
-		printf("%ld\n", veast);
-		printf("%ld\n", vdown);
+		//printf("%ld\n", vnorth);
+		//printf("%ld\n", veast);
+		//printf("%ld\n", vdown);
 		//for (int i = 7; i >= 0; i--) {
 		//	printf("%d ", (flags >> i) & 1);
 		//}
 		//printf("\n");
 		//printf("Time %ld\n", get_timestamp(self));
-		
-		
+
+		// Send to BLE via message queue
+		gnss_velocity_msg_t vel_msg = {
+        	.vel_north = vnorth,
+        	.vel_east = veast,
+        	.vel_down = vdown
+    	};
+
+		UINT status;
+    	// Send to queue (non-blocking to avoid blocking GNSS thread)
+    	status = tx_queue_send(&gnss_to_ble_queue, &vel_msg, TX_NO_WAIT);
+		//printf("Queue send status: %d\n", status); // DEBUG
+		// Sleep until next 200 ms epoch
+    	tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND / 5);
+    
+    	if (status == TX_SUCCESS) {
+       	 // Successfully queued, now signal the BLE thread
+        	// TX_OR means set the flag bits using OR operation
+        	// This allows multiple flags to be set independently
+        	UINT flag_status = tx_event_flags_set(&gnss_events, GNSS_DATA_READY, TX_OR);
+			//printf("Event flag set status: %d\n", flag_status); //DEBUG
+    	}
+    	else if (status == TX_QUEUE_FULL) {
+        	// Queue is full - you could:
+        	// 1. Log/count dropped messages
+        	// 2. Still set the flag so BLE drains the queue
+			printf("Queue full!\n"); // DEBUG
+        	tx_event_flags_set(&gnss_events, GNSS_DATA_READY, TX_OR);
+    	}
+    	else {
+        	printf("Queue error: %d\n", status); // DEBUG
+    	}
+    	// else: other error, message not queued
 
 		// This allows us to make sure we're not in the sampling window if time has not been resolved
 		if (!self->is_clock_set) {
@@ -332,9 +331,8 @@ void gnss_process_message(GNSS* self)
 		self->v_east_sum += veast;
 		self->v_down_sum += vdown;
 
-		//self->GNSS_N_Array[self->total_samples] = ((float)((float)vnorth));
-		//self->GNSS_E_Array[self->total_samples] = ((float)((float)veast));
-		//self->GNSS_D_Array[self->total_samples] = ((float)((float)vdown));
+
+
 
 		self->GNSS_N_Array[self->total_samples] = ((float)((float)vnorth)/MM_PER_METER);
 		self->GNSS_E_Array[self->total_samples] = ((float)((float)veast)/MM_PER_METER);
@@ -342,7 +340,7 @@ void gnss_process_message(GNSS* self)
 
 		self->number_cycles_without_data = 0;
 		self->total_samples++;
-		printf("total samples: %d\n", self->total_samples);
+		//printf("total samples: %d\n", self->total_samples);
 		buf_length -= buf_end - buf_start;
 		buf_start = buf_end;
 	}

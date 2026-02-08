@@ -80,6 +80,8 @@ __packed float			timestamp;
 #define IRIDIUM_ENABLED false
 // If there is GNSS present
 #define GNSS_ENABLED true
+// If there is BLE present
+#define BLE_ENABLED true
 // If there is WAVES present
 #define WAVES_ENABLED true
 

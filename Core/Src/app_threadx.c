@@ -66,6 +66,7 @@ TX_THREAD waves_thread;
 TX_THREAD iridium_thread;
 TX_THREAD end_of_cycle_thread;
 TX_THREAD sd_thread;
+TX_THREAD ble_thread;
 // We'll use flags to dictate control flow between the threads
 TX_EVENT_FLAGS_GROUP thread_control_flags;
 // Flags for errors
@@ -88,6 +89,7 @@ GNSS* gnss;
 Iridium* iridium;
 RF_Switch* rf_switch;
 SD* sd;
+BLE* ble;
 // Handles for all the STM32 peripherals
 device_handles_t *device_handles;
 // Only included if we will be using the IMU
@@ -167,6 +169,20 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 	// Create the gnss thread. VERY_HIGH priority, no preemption-threshold
 	ret = tx_thread_create(&gnss_thread, "gnss thread", gnss_thread_entry, 0, pointer,
 		  THREAD_EXTRA_LARGE_STACK_SIZE, MID, MID, TX_NO_TIME_SLICE, TX_DONT_START);
+	if (ret != TX_SUCCESS){
+	  return ret;
+	}
+	#endif
+	//
+	#if BLE_ENABLED
+	// Allocate stack for the ble thread
+	ret = tx_byte_allocate(byte_pool, (VOID**) &pointer, THREAD_MEDIUM_STACK_SIZE, TX_NO_WAIT);
+	if (ret != TX_SUCCESS){
+	  return ret;
+	}
+	// Create the ble thread. VERY_HIGH priority, no preemption-threshold
+	ret = tx_thread_create(&ble_thread, "ble thread", ble_thread_entry, 0, pointer,
+		   THREAD_MEDIUM_STACK_SIZE, LOW, LOW, TX_NO_TIME_SLICE, TX_AUTO_START);
 	if (ret != TX_SUCCESS){
 	  return ret;
 	}
@@ -266,6 +282,12 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 	//
 	// The sd struct
 	ret = tx_byte_allocate(byte_pool, (VOID**) &sd, sizeof(SD) + 100, TX_NO_WAIT);
+	if (ret != TX_SUCCESS){
+		return ret;
+	}
+	//
+	// The ble struct
+	ret = tx_byte_allocate(byte_pool, (VOID**) &ble, sizeof(BLE) + 100, TX_NO_WAIT);
 	if (ret != TX_SUCCESS){
 		return ret;
 	}
@@ -443,7 +465,14 @@ void startup_thread_entry(ULONG thread_input){
 
 	sd_init(sd, &configuration, &thread_control_flags, &error_flags,
 			&sbd_message, device_handles->hrtc);
-			
+	messaging_init();
+	ble_init(ble, &configuration, &thread_control_flags, device_handles->BLE_uart, device_handles->BLE_dma_handle,
+		 &error_flags);
+/*
+#if BLE_ENABLED
+	ble_init(sd, &configuration, &thread_control_flags, &error_flags,
+			&sbd_message, device_handles->hrtc);
+#endif	*/		
 
 #if GNSS_ENABLED
 	// Initialize the structs
@@ -467,6 +496,7 @@ void startup_thread_entry(ULONG thread_input){
 	rf_switch_init(rf_switch);
 #endif
 	sd->config(sd);
+	//ble->config(ble);
 	// Initialize the RF switch and set it to the GNSS port
 	rf_switch_init(rf_switch);
 
@@ -624,14 +654,6 @@ void gnss_thread_entry(ULONG thread_input){
 
 	// Grab the RF switch
 	//rf_switch->set_gnss_port(rf_switch);
-	
-	/*
-	real16_T myReal;
-	myReal.bitPattern = 0x1234; // some value
-
-	int myInt = (int)myReal.bitPattern;  // conversion
-
-	printf("myInt %d\n", myInt);*/
 
 	// Start the timer for resolution stages
 	gnss->reset_timer(gnss, configuration.gnss_max_acquisition_wait_time);
@@ -989,6 +1011,46 @@ void sd_thread_entry(ULONG thread_input){
 	}
 	// We're done, terminate this thread
 	tx_thread_terminate(&sd_thread);
+}
+void ble_thread_entry(ULONG thread_input){
+	gnss_velocity_msg_t vel_msg;
+    ULONG actual_flags;
+    UINT status;
+    UINT message_count;
+	static UINT wake_count = 0;
+ while(1) {
+		printf("[BLE] Waiting for event (wake_count=%u)...\n", wake_count);
+        // Wait for GNSS data ready event
+        // TX_OR_CLEAR: Wait for any flag in the mask and clear it when received
+        // TX_WAIT_FOREVER: Block indefinitely until flag is set
+        status = tx_event_flags_get(&gnss_events, 
+                                    GNSS_DATA_READY,      // Flags to wait for
+                                    TX_OR_CLEAR,          // Get mode (OR + auto-clear)
+                                    &actual_flags,        // Which flags were actually set
+                                    TX_WAIT_FOREVER);     // Wait timeout
+        
+		printf("BLE: Event received! Status: %d, Flags: 0x%lx\n", status, actual_flags); // DEBUG
+        if (status == TX_SUCCESS) {
+            // Event received! Process all available messages in the queue
+            message_count = 0;
+            
+				while (tx_queue_receive(&gnss_to_ble_queue, &vel_msg, TX_NO_WAIT) == TX_SUCCESS) {
+                // Send each message via BLE
+				message_count++;
+                printf("[BLE] Processing message %u: N=%ld E=%ld D=%ld\n", message_count, vel_msg.vel_north, vel_msg.vel_east, 
+                vel_msg.vel_down);
+                ble_error_code_t ble_status = ble -> send_data(ble, vel_msg.vel_north, vel_msg.vel_east, vel_msg.vel_down);
+                
+                message_count++;
+                
+                // Optional: Handle BLE errors
+                if (ble_status != BLE_SUCCESS) {
+                    // Log error, retry, or handle as needed
+                    // For now, just continue to next message
+                }
+            }
+        }
+    }
 }
 /**
   * @brief  teardown_thread_entry

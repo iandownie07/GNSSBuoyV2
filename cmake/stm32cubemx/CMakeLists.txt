@@ -15,8 +15,6 @@ target_compile_definitions(stm32cubemx INTERFACE
     $<$<CONFIG:Debug>:DEBUG>
 )
 
-
-
 target_include_directories(stm32cubemx INTERFACE
     ../../FileX/App
     ../../FileX/Target
@@ -459,12 +457,16 @@ target_sources(stm32cubemx INTERFACE
     ../../Middlewares/ST/threadx/common/src/txe_timer_deactivate.c
     ../../Middlewares/ST/threadx/common/src/txe_timer_delete.c
     ../../Middlewares/ST/threadx/common/src/txe_timer_info_get.c
-    ../../Core/Src/Peripherals/battery.c
+    ../../Core/Src/sysmem.c
+    ../../Core/Src/syscalls.c
+        ../../Core/Src/Peripherals/battery.c
 ../../Core/Src/Peripherals/ct_sensor.c
 ../../Core/Src/Peripherals/gnss.c
 ../../Core/Src/Peripherals/imu.c
 ../../Core/Src/Peripherals/iridium.c
 ../../Core/Src/Peripherals/sd.c
+../../Core/Src/Peripherals/ble.c
+../../Core/Src/Common/messaging.c
 ../../Core/Src/Peripherals/rf_switch.c
 #../../Core/Src/Peripherals/temp_sensor.c
 ../../Core/Src/Peripherals/u_ubx_protocol.c
@@ -494,8 +496,6 @@ target_sources(stm32cubemx INTERFACE
 ../../Core/Src/linked_list.c
 ../../Core/Src/byte_array.c
 #../../Core/Src/flash_storage.c 
-    ../../Core/Src/sysmem.c
-    ../../Core/Src/syscalls.c
     ../../startup_stm32u575xx.s
     ../../Core/Src/tx_initialize_low_level.S
     ../../Middlewares/ST/threadx/ports/cortex_m33/gnu/src/tx_thread_context_restore.S

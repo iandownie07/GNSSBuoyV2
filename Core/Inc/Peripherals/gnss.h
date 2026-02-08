@@ -22,6 +22,7 @@
 #include "stdbool.h"
 #include "u_ubx_protocol.h"
 #include "u_error_common.h"
+#include "Common/messaging.h"
 
 // Return codes
 typedef enum gnss_error_code{

@@ -19,7 +19,7 @@
 void sd_init(SD* self, microSWIFT_configuration* global_config, TX_EVENT_FLAGS_GROUP* control_flags, 
 		 TX_EVENT_FLAGS_GROUP* error_flags, sbd_message_type_52* current_message, RTC_HandleTypeDef* rtc_handle)
 {
-	//self->global_config = global_config;
+	self->global_config = global_config;
 	self->control_flags = control_flags;
 	self->error_flags = error_flags;
 	self->current_message = current_message;

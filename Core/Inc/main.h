@@ -44,9 +44,11 @@ extern "C" {
 typedef struct {
 	RTC_HandleTypeDef* hrtc;
 	UART_HandleTypeDef* CT_uart;
+  UART_HandleTypeDef* BLE_uart;
 	UART_HandleTypeDef* Iridium_uart;
 	UART_HandleTypeDef* GNSS_uart;
 	DMA_HandleTypeDef* CT_dma_handle;
+  DMA_HandleTypeDef* BLE_dma_handle;
 	DMA_HandleTypeDef* GNSS_dma_handle;
 	DMA_HandleTypeDef* Iridium_tx_dma_handle;
 	DMA_HandleTypeDef* Iridium_rx_dma_handle;

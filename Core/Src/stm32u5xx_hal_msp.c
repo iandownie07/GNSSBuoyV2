@@ -425,7 +425,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     handle_GPDMA1_Channel2.Init.Request = GPDMA1_REQUEST_USART3_TX;
     handle_GPDMA1_Channel2.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
     handle_GPDMA1_Channel2.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    handle_GPDMA1_Channel2.Init.SrcInc = DMA_SINC_FIXED;
+    handle_GPDMA1_Channel2.Init.SrcInc = DMA_SINC_INCREMENTED; // DMA_SINC_FIXED for Iridium
     handle_GPDMA1_Channel2.Init.DestInc = DMA_DINC_FIXED;
     handle_GPDMA1_Channel2.Init.SrcDataWidth = DMA_SRC_DATAWIDTH_BYTE;
     handle_GPDMA1_Channel2.Init.DestDataWidth = DMA_DEST_DATAWIDTH_BYTE;
@@ -447,6 +447,9 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
       Error_Handler();
     }
 
+    /* USART3 interrupt Init */
+    HAL_NVIC_SetPriority(USART3_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USART3_IRQn);
   /* USER CODE BEGIN USART3_MspInit 1 */
 
   /* USER CODE END USART3_MspInit 1 */
@@ -558,6 +561,9 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
     /* USART3 DMA DeInit */
     HAL_DMA_DeInit(huart->hdmarx);
     HAL_DMA_DeInit(huart->hdmatx);
+
+    /* USART3 interrupt DeInit */
+    HAL_NVIC_DisableIRQ(USART3_IRQn);
   /* USER CODE BEGIN USART3_MspDeInit 1 */
 
   /* USER CODE END USART3_MspDeInit 1 */
