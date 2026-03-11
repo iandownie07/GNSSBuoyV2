@@ -1012,6 +1012,8 @@ void sd_thread_entry(ULONG thread_input){
 	// We're done, terminate this thread
 	tx_thread_terminate(&sd_thread);
 }
+
+#if BLE_ENABLED
 void ble_thread_entry(ULONG thread_input){
 	gnss_velocity_msg_t vel_msg;
     ULONG actual_flags;
@@ -1019,7 +1021,7 @@ void ble_thread_entry(ULONG thread_input){
     UINT message_count;
 	static UINT wake_count = 0;
  while(1) {
-		printf("[BLE] Waiting for event (wake_count=%u)...\n", wake_count);
+		//printf("[BLE] Waiting for event (wake_count=%u)...\n", wake_count);
         // Wait for GNSS data ready event
         // TX_OR_CLEAR: Wait for any flag in the mask and clear it when received
         // TX_WAIT_FOREVER: Block indefinitely until flag is set
@@ -1029,7 +1031,7 @@ void ble_thread_entry(ULONG thread_input){
                                     &actual_flags,        // Which flags were actually set
                                     TX_WAIT_FOREVER);     // Wait timeout
         
-		printf("BLE: Event received! Status: %d, Flags: 0x%lx\n", status, actual_flags); // DEBUG
+		//printf("BLE: Event received! Status: %d, Flags: 0x%lx\n", status, actual_flags); // DEBUG
         if (status == TX_SUCCESS) {
             // Event received! Process all available messages in the queue
             message_count = 0;
@@ -1037,8 +1039,8 @@ void ble_thread_entry(ULONG thread_input){
 				while (tx_queue_receive(&gnss_to_ble_queue, &vel_msg, TX_NO_WAIT) == TX_SUCCESS) {
                 // Send each message via BLE
 				message_count++;
-                printf("[BLE] Processing message %u: N=%ld E=%ld D=%ld\n", message_count, vel_msg.vel_north, vel_msg.vel_east, 
-                vel_msg.vel_down);
+                //printf("[BLE] Processing message %u: N=%ld E=%ld D=%ld\n", message_count, vel_msg.vel_north, vel_msg.vel_east, 
+                //vel_msg.vel_down);
                 ble_error_code_t ble_status = ble -> send_data(ble, vel_msg.vel_north, vel_msg.vel_east, vel_msg.vel_down);
                 
                 message_count++;
@@ -1052,6 +1054,7 @@ void ble_thread_entry(ULONG thread_input){
         }
     }
 }
+#endif
 /**
   * @brief  teardown_thread_entry
   *         This thread will execute when either an error flag is set or all

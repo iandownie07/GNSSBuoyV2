@@ -1,0 +1,6 @@
+{
+  // Use cmake path for homebrew
+  "cmake.cmakePath": "/opt/homebrew/bin/cmake", 
+  // Include exact compiler commands for every source file to avoid Intellisense guessing paths
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+}

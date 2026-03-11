@@ -111,7 +111,7 @@ async def main():
 
                 print(timestamp.time(), n, e, d)
 
-            async with BleakClient(ADDRESS, timeout=120.0) as client:
+            async with BleakClient(ADDRESS, timeout=60.0) as client:
                 print("Connected:", client.is_connected)
 
                 await asyncio.sleep(1.0)

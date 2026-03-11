@@ -81,7 +81,7 @@ __packed float			timestamp;
 // If there is GNSS present
 #define GNSS_ENABLED true
 // If there is BLE present
-#define BLE_ENABLED true
+#define BLE_ENABLED false
 // If there is WAVES present
 #define WAVES_ENABLED true
 

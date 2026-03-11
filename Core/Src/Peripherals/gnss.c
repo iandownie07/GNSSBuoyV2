@@ -247,6 +247,7 @@ void gnss_process_message(GNSS* self)
 		//printf("\n");
 		//printf("Time %ld\n", get_timestamp(self));
 
+		#if BLE_ENABLED
 		// Send to BLE via message queue
 		gnss_velocity_msg_t vel_msg = {
         	.vel_north = vnorth,
@@ -279,6 +280,7 @@ void gnss_process_message(GNSS* self)
         	printf("Queue error: %d\n", status); // DEBUG
     	}
     	// else: other error, message not queued
+		#endif
 
 		// This allows us to make sure we're not in the sampling window if time has not been resolved
 		if (!self->is_clock_set) {
