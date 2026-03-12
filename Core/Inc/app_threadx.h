@@ -46,6 +46,7 @@
 #include "Peripherals/iridium.h"
 #include "Peripherals/sd.h"
 #include "Peripherals/ble.h"
+#include "ekf.h"
 #include "NEDWaves/mem_replacements.h"
 #include "configuration.h"
 #include "linked_list.h"
@@ -146,6 +147,7 @@ void gnss_thread_entry(ULONG thread_input);
 void waves_thread_entry(ULONG thread_input);
 void sd_thread_entry(ULONG thread_input);
 void ble_thread_entry(ULONG thread_input);
+void ekf_thread_entry(ULONG thread_input);
 void iridium_thread_entry(ULONG thread_input);
 void end_of_cycle_thread_entry(ULONG thread_input);
 /* USER CODE END EFP */

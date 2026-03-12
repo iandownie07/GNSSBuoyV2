@@ -458,44 +458,7 @@ target_sources(stm32cubemx INTERFACE
     ../../Middlewares/ST/threadx/common/src/txe_timer_delete.c
     ../../Middlewares/ST/threadx/common/src/txe_timer_info_get.c
     ../../Core/Src/sysmem.c
-    ../../Core/Src/syscalls.c
-        ../../Core/Src/Peripherals/battery.c
-../../Core/Src/Peripherals/ct_sensor.c
-../../Core/Src/Peripherals/gnss.c
-../../Core/Src/Peripherals/imu.c
-../../Core/Src/Peripherals/iridium.c
-../../Core/Src/Peripherals/sd.c
-../../Core/Src/Peripherals/ble.c
-../../Core/Src/Common/messaging.c
-../../Core/Src/Peripherals/rf_switch.c
-#../../Core/Src/Peripherals/temp_sensor.c
-../../Core/Src/Peripherals/u_ubx_protocol.c
-../../Core/Src/NEDWaves/bsearch.c
-../../Core/Src/NEDWaves/colon.c
-../../Core/Src/NEDWaves/combineVectorElements.c
-../../Core/Src/NEDWaves/div.c
-../../Core/Src/NEDWaves/fft.c
-../../Core/Src/NEDWaves/FFTImplementationCallback.c
-#../../Core/Src/NEDWaves/interp1.c
-../../Core/Src/NEDWaves/mean.c
-../../Core/Src/NEDWaves/mem_replacements.c
-../../Core/Src/NEDWaves/minOrMax.c
-../../Core/Src/NEDWaves/NEDwaves_memlight_data.c
-../../Core/Src/NEDWaves/NEDwaves_memlight_emxAPI.c
-../../Core/Src/NEDWaves/NEDwaves_memlight_emxutil.c
-../../Core/Src/NEDWaves/NEDwaves_memlight_initialize.c
-../../Core/Src/NEDWaves/NEDwaves_memlight_terminate.c
-../../Core/Src/NEDWaves/NEDwaves_memlight.c
-../../Core/Src/NEDWaves/nullAssignment.c
-../../Core/Src/NEDWaves/rt_nonfinite.c
-../../Core/Src/NEDWaves/rtGetInf.c
-../../Core/Src/NEDWaves/rtGetNaN.c
-../../Core/Src/NEDWaves/rtwhalf.c
-../../Core/Src/NEDWaves/std.c 
-../../Core/Src/NEDWaves/var.c
-../../Core/Src/linked_list.c
-../../Core/Src/byte_array.c
-#../../Core/Src/flash_storage.c 
+    ../../Core/Src/syscalls.c 
     ../../startup_stm32u575xx.s
     ../../Core/Src/tx_initialize_low_level.S
     ../../Middlewares/ST/threadx/ports/cortex_m33/gnu/src/tx_thread_context_restore.S

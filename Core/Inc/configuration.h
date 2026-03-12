@@ -84,6 +84,8 @@ __packed float			timestamp;
 #define BLE_ENABLED false
 // If there is WAVES present
 #define WAVES_ENABLED true
+// If there is EKF present
+#define EKF_ENABLED true
 
 typedef struct microSWIFT_configuration{
 	uint32_t samples_per_window;

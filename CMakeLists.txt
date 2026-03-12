@@ -48,19 +48,64 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
+file(GLOB_RECURSE CMSIS_DSP_SOURCES
+    ${CMAKE_SOURCE_DIR}/Drivers/CMSIS/DSP/Source/*.c
+)
+
+file(GLOB PERIPHERAL_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/Peripherals/*.c
+)
+
+file(GLOB COMMON_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/Common/*.c
+)
+
+file(GLOB NEDWAVES_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/NEDWaves/*.c
+)
+
+file(GLOB CORE_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/*.c
+)
+
+# Remove wrapper files that include other sources internally
+list(FILTER CMSIS_DSP_SOURCES EXCLUDE REGEX ".*/.*Functions\\.c$")
+list(FILTER CMSIS_DSP_SOURCES EXCLUDE REGEX ".*/CommonTables\\.c$")
+
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    ${CORE_SOURCES}
+    ${CMSIS_DSP_SOURCES}
+    ${PERIPHERAL_SOURCES}
+    ${COMMON_SOURCES}
+    ${NEDWAVES_SOURCES}
+)
+
+list(REMOVE_ITEM PERIPHERAL_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/Peripherals/temp_sensor.c
+)
+
+list(REMOVE_ITEM NEDWAVES_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/NEDWaves/interp1.c
+)
+
+list(REMOVE_ITEM COMMON_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/flash_storage.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_SOURCE_DIR}/Drivers/CMSIS/DSP/Include
+    ${CMAKE_SOURCE_DIR}/Drivers/CMSIS/DSP/PrivateInclude
 )
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    ARM_MATH_CM33
+    ARM_MATH_FLOAT32
 )
 
 # Add linked libraries

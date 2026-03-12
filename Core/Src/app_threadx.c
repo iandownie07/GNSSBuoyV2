@@ -67,6 +67,7 @@ TX_THREAD iridium_thread;
 TX_THREAD end_of_cycle_thread;
 TX_THREAD sd_thread;
 TX_THREAD ble_thread;
+TX_THREAD ekf_thread;
 // We'll use flags to dictate control flow between the threads
 TX_EVENT_FLAGS_GROUP thread_control_flags;
 // Flags for errors
@@ -90,6 +91,7 @@ Iridium* iridium;
 RF_Switch* rf_switch;
 SD* sd;
 BLE* ble;
+EKF* ekf;
 // Handles for all the STM32 peripherals
 device_handles_t *device_handles;
 // Only included if we will be using the IMU
@@ -183,6 +185,19 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 	// Create the ble thread. VERY_HIGH priority, no preemption-threshold
 	ret = tx_thread_create(&ble_thread, "ble thread", ble_thread_entry, 0, pointer,
 		   THREAD_MEDIUM_STACK_SIZE, LOW, LOW, TX_NO_TIME_SLICE, TX_AUTO_START);
+	if (ret != TX_SUCCESS){
+	  return ret;
+	}
+	#endif
+		#if EKF_ENABLED
+	// Allocate stack for the ble thread
+	ret = tx_byte_allocate(byte_pool, (VOID**) &pointer, THREAD_EXTRA_LARGE_STACK_SIZE, TX_NO_WAIT);
+	if (ret != TX_SUCCESS){
+	  return ret;
+	}
+	// Create the ble thread. VERY_HIGH priority, no preemption-threshold
+	ret = tx_thread_create(&ekf_thread, "ekf thread", ekf_thread_entry, 0, pointer,
+		   THREAD_EXTRA_LARGE_STACK_SIZE, LOW, LOW, TX_NO_TIME_SLICE, TX_AUTO_START);
 	if (ret != TX_SUCCESS){
 	  return ret;
 	}
@@ -286,12 +301,22 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 		return ret;
 	}
 	//
+#if BLE_ENABLED
 	// The ble struct
 	ret = tx_byte_allocate(byte_pool, (VOID**) &ble, sizeof(BLE) + 100, TX_NO_WAIT);
 	if (ret != TX_SUCCESS){
 		return ret;
 	}
 	//
+#endif
+#if EKF_ENABLED
+	// The ekf struct
+	ret = tx_byte_allocate(byte_pool, (VOID**) &ekf, sizeof(EKF) + 100, TX_NO_WAIT);
+	if (ret != TX_SUCCESS){
+		return ret;
+	}
+	//
+#endif
 #if IRIDIUM_ENABLED
 	// The Iridium error message payload array
 	ret = tx_byte_allocate(byte_pool, (VOID**) &iridium_error_message, IRIDIUM_ERROR_MESSAGE_PAYLOAD_SIZE + 100
@@ -466,13 +491,15 @@ void startup_thread_entry(ULONG thread_input){
 	sd_init(sd, &configuration, &thread_control_flags, &error_flags,
 			&sbd_message, device_handles->hrtc);
 	messaging_init();
+#if BLE_ENABLED
 	ble_init(ble, &configuration, &thread_control_flags, device_handles->BLE_uart, device_handles->BLE_dma_handle,
 		 &error_flags);
-/*
-#if BLE_ENABLED
-	ble_init(sd, &configuration, &thread_control_flags, &error_flags,
-			&sbd_message, device_handles->hrtc);
-#endif	*/		
+#endif
+
+#if EKF_ENABLED
+		ekf_init(ekf, &configuration, &thread_control_flags, device_handles->BLE_uart, device_handles->BLE_dma_handle,
+		 &error_flags);
+#endif	
 
 #if GNSS_ENABLED
 	// Initialize the structs
