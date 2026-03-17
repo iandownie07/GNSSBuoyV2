@@ -59,7 +59,7 @@ __packed float			timestamp;
 
 #else
 // Number of samples in each sampling window
-#define TOTAL_SAMPLES_PER_WINDOW 8192	//8192
+#define TOTAL_SAMPLES_PER_WINDOW 1024	//8192
 
 // The max time in MINUTES to try to get an Iridium message off
 #define IRIDIUM_MAX_TRANSMIT_TIME 10

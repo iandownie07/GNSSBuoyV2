@@ -94,6 +94,8 @@ BLE* ble;
 EKF* ekf;
 // Handles for all the STM32 peripherals
 device_handles_t *device_handles;
+// Global variable for EKF total samples
+volatile uint32_t total_samples = 0;
 // Only included if we will be using the IMU
 #if IMU_ENABLED
 int16_t* IMU_N_Array;
@@ -189,13 +191,13 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 	  return ret;
 	}
 	#endif
-		#if EKF_ENABLED
+	#if EKF_ENABLED
 	// Allocate stack for the ble thread
 	ret = tx_byte_allocate(byte_pool, (VOID**) &pointer, THREAD_EXTRA_LARGE_STACK_SIZE, TX_NO_WAIT);
 	if (ret != TX_SUCCESS){
 	  return ret;
 	}
-	// Create the ble thread. VERY_HIGH priority, no preemption-threshold
+	// Create the ekf thread. VERY_HIGH priority, no preemption-threshold
 	ret = tx_thread_create(&ekf_thread, "ekf thread", ekf_thread_entry, 0, pointer,
 		   THREAD_EXTRA_LARGE_STACK_SIZE, LOW, LOW, TX_NO_TIME_SLICE, TX_AUTO_START);
 	if (ret != TX_SUCCESS){
@@ -496,17 +498,16 @@ void startup_thread_entry(ULONG thread_input){
 		 &error_flags);
 #endif
 
-#if EKF_ENABLED
-		ekf_init(ekf, &configuration, &thread_control_flags, device_handles->BLE_uart, device_handles->BLE_dma_handle,
-		 &error_flags);
-#endif	
-
 #if GNSS_ENABLED
 	// Initialize the structs
 	gnss_init(gnss, &configuration, device_handles->GNSS_uart, device_handles->GNSS_dma_handle,
 			&thread_control_flags, &error_flags, device_handles->gnss_timer, &(ubx_message_process_buf[0]), device_handles->hrtc,
 			north->data, east->data, down->data);
 #endif
+
+#if EKF_ENABLED
+	ekf_init(ekf, &configuration, &thread_control_flags, &error_flags, north->data, east->data, down->data, &total_samples);
+#endif	
 #if IRIDIUM_ENABLED
 	iridium_init(iridium, &configuration, device_handles->Iridium_uart,
 					device_handles->Iridium_rx_dma_handle, device_handles->iridium_timer,
@@ -526,7 +527,9 @@ void startup_thread_entry(ULONG thread_input){
 	//ble->config(ble);
 	// Initialize the RF switch and set it to the GNSS port
 	rf_switch_init(rf_switch);
-
+#if EKF_ENABLED
+	ekf->config(ekf);
+#endif	
 	tx_return = tx_event_flags_get(&thread_control_flags, FULL_CYCLE_COMPLETE, TX_OR_CLEAR,
 			&actual_flags, TX_NO_WAIT);
 	// If this is a subsequent window, just setup the GNSS, skip the rest
@@ -659,6 +662,99 @@ void startup_thread_entry(ULONG thread_input){
 	tx_thread_terminate(&startup_thread);
 }
 
+void ekf_thread_entry(ULONG thread_input)
+{
+    gnss_to_ekf_msg_t gnss_msg;
+    ULONG actual_flags;
+    UINT status;
+    bool initialized = false;
+    
+    while (1) {
+        // Wait for GNSS data ready event 
+        status = tx_event_flags_get(&ekf_events, 
+                                    GNSS_DATA_READY,  
+                                    TX_OR_CLEAR,
+                                    &actual_flags,
+                                    TX_WAIT_FOREVER);
+        
+        if (status != TX_SUCCESS) {
+            printf("EKF: Event flag error: %d\n", status);
+            continue;
+        }
+        
+        // Process all available GNSS messages
+        while (tx_queue_receive(&gnss_to_ekf_queue, &gnss_msg, TX_NO_WAIT) == TX_SUCCESS) {
+            
+            if (!gnss_msg.valid) {
+                continue;
+            }
+            
+            // Initialize on first message
+            if (!initialized) {
+                ekf->state.pos_n = gnss_msg.pos_n;
+                ekf->state.pos_e = gnss_msg.pos_e;
+                ekf->state.pos_d = gnss_msg.pos_d;
+                ekf->state.vel_n = gnss_msg.vel_north / 1000.0f;
+                ekf->state.vel_e = gnss_msg.vel_east / 1000.0f;
+                ekf->state.vel_d = gnss_msg.vel_down / 1000.0f;
+                ekf->state.q0 = 1.0f;
+                ekf->state.q1 = 0.0f;
+                ekf->state.q2 = 0.0f;
+                ekf->state.q3 = 0.0f;
+                initialized = true;
+                printf("EKF: Initialized\n");
+            }
+            
+            // Update state (passthrough for now)
+            ekf->state.vel_n = gnss_msg.vel_north / 1000.0f;
+            ekf->state.vel_e = gnss_msg.vel_east / 1000.0f;
+            ekf->state.vel_d = gnss_msg.vel_down / 1000.0f;
+            ekf->stats.update_count++;
+            
+            // Write to arrays
+            if (*ekf->total_samples < configuration.samples_per_window) {
+                ekf->GNSS_N_Array[*ekf->total_samples] = ekf->state.vel_n;
+                ekf->GNSS_E_Array[*ekf->total_samples] = ekf->state.vel_e;
+                ekf->GNSS_D_Array[*ekf->total_samples] = ekf->state.vel_d;
+                (*ekf->total_samples)++;
+                
+                if (*ekf->total_samples % 100 == 0) {
+                    printf("EKF: %lu / %d samples\n",
+                           *ekf->total_samples, configuration.samples_per_window);
+                }
+            }
+            
+            // Send to BLE
+            #if BLE_ENABLED
+            gnss_velocity_msg_t ble_msg = {
+                .vel_north = (int32_t)(ekf->state.vel_n * 1000.0f),
+                .vel_east = (int32_t)(ekf->state.vel_e * 1000.0f),
+                .vel_down = (int32_t)(ekf->state.vel_d * 1000.0f)
+            };
+            tx_queue_send(&gnss_to_ble_queue, &ble_msg, TX_NO_WAIT);
+            tx_event_flags_set(&gnss_events, GNSS_DATA_READY, TX_OR);
+            #endif
+            
+            // Check if done
+            if (*ekf->total_samples >= configuration.samples_per_window) {
+                printf("EKF: Complete (%lu samples)\n", *ekf->total_samples);
+				tx_event_flags_set(&thread_control_flags, SAMPLE_COLLECTION_COMPLETE, TX_OR);
+                
+                // Start waves thread
+                #if CT_ENABLED
+                tx_thread_resume(&ct_thread);
+                #else
+                tx_thread_resume(&waves_thread);
+                #endif
+                
+                // Job done, terminate
+                tx_thread_terminate(&ekf_thread);
+                return;  // Exit function
+            }
+        }
+    }
+}
+
 #if GNSS_ENABLED
 /**
   * @brief  gnss_thread_entry
@@ -700,6 +796,9 @@ void gnss_thread_entry(ULONG thread_input){
 		gnss->is_configured = true;
 	}
 
+	
+
+
 	while (!(gnss->all_resolution_stages_complete || gnss->timer_timeout)) {
 
 		tx_return = tx_event_flags_get(&thread_control_flags, GNSS_MESSAGE_RECEIVED, TX_OR_CLEAR,
@@ -728,13 +827,35 @@ void gnss_thread_entry(ULONG thread_input){
 	// Wait until all the samples have been processed
 	while (!gnss->all_samples_processed){
 
-		tx_return = tx_event_flags_get(&thread_control_flags, GNSS_MESSAGE_RECEIVED, TX_OR_CLEAR,
-				&actual_flags, timer_ticks_to_get_message);
-
-		if (tx_return != TX_SUCCESS){
-			jump_to_end_of_window(GNSS_ERROR);
-		}
-		gnss->process_message(gnss);
+		tx_return = tx_event_flags_get(&thread_control_flags, GNSS_MESSAGE_RECEIVED | SAMPLE_COLLECTION_COMPLETE,
+                                      TX_OR_CLEAR, &actual_flags, timer_ticks_to_get_message);
+        
+        if (tx_return != TX_SUCCESS) {
+            jump_to_end_of_window(GNSS_ERROR);
+        }
+        if (actual_flags & SAMPLE_COLLECTION_COMPLETE) {
+            // Record final timestamp and cleanup
+            HAL_UART_DMAStop(gnss->gnss_uart_handle);
+            gnss->sample_window_stop_time = gnss->get_timestamp(gnss);
+            gnss->all_samples_processed = true;
+            
+            // Calculate sampling frequency
+            gnss->sample_window_freq = (double)(
+                ((double)configuration.samples_per_window) /
+                ((double)(gnss->sample_window_stop_time - gnss->sample_window_start_time))
+            );
+            
+            printf("GNSS: Sample collection complete, freq = %.2f Hz\n", 
+                   gnss->sample_window_freq);
+            break;  // Exit the loop
+        }
+        
+        // ========================================
+        // Process GNSS messages
+        // ========================================
+        if (actual_flags & GNSS_MESSAGE_RECEIVED) {
+            gnss->process_message(gnss);
+        }
 
 		// If this evaluates to true, something hung up with GNSS sampling. End the sample window
 		if (gnss->timer_timeout) {
@@ -762,20 +883,23 @@ void gnss_thread_entry(ULONG thread_input){
 	// Port the RF switch to the modem
 	rf_switch->set_iridium_port(rf_switch);
 #endif
-#if CT_ENABLED
+
+#if !EKF_ENABLED
+	#if CT_ENABLED
 
 	if (tx_thread_resume(&ct_thread) != TX_SUCCESS){
 		shut_it_all_down();
 		HAL_NVIC_SystemReset();
 	}
 
-#else
+	#else
 
 	if (tx_thread_resume(&waves_thread) != TX_SUCCESS){		
 		shut_it_all_down();
 		HAL_NVIC_SystemReset();
 	}
 
+	#endif
 #endif
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET); // LD1
 	

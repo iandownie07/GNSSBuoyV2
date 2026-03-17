@@ -62,31 +62,35 @@
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-typedef enum control_flags{
- 	// Ready states
- 	GNSS_READY = 1 << 0,
- 	IMU_READY = 1 << 1,
- 	CT_READY = 1 << 2,
- 	IRIDIUM_READY = 1 << 3,
- 	WAVES_READY = 1 << 4,
- 	// Done states
- 	GNSS_DONE = 1 << 5,
- 	IMU_DONE = 1 << 6,
- 	CT_DONE = 1 << 7,
- 	IRIDIUM_DONE = 1 << 8,
-	WAVES_DONE = 1 << 9,
-	FULL_CYCLE_COMPLETE = 1 << 10,
-	// DMA reception flags
-	GNSS_CONFIG_RECVD = 1 << 11,
-	CT_MSG_RECVD = 1 << 12,
-	IRIDIUM_MSG_RECVD = 1 << 13,
-	GNSS_CONFIG_REQUIRED = 1 << 14,
-	GNSS_MESSAGE_RECEIVED = 1 << 15,
-	// GNSS timer flags
-	GNSS_INITIAL_RESOLUTION_STAGE = 1 << 16,
-	GNSS_WINDOW_PROCESSING_STAGE = 1 << 17
-} control_flags_t;
 
+typedef enum control_flags{
+    // Ready states
+    GNSS_READY = 1 << 0,
+    IMU_READY = 1 << 1,
+    CT_READY = 1 << 2,
+    IRIDIUM_READY = 1 << 3,
+    WAVES_READY = 1 << 4,
+    
+    // Done states
+    GNSS_DONE = 1 << 5,
+    IMU_DONE = 1 << 6,
+    CT_DONE = 1 << 7,
+    IRIDIUM_DONE = 1 << 8,
+    WAVES_DONE = 1 << 9,
+    FULL_CYCLE_COMPLETE = 1 << 10,
+    SAMPLE_COLLECTION_COMPLETE = 1 << 11,  // ← All sample collection (GNSS+IMU)
+    
+    // DMA reception flags
+    GNSS_CONFIG_RECVD = 1 << 12,
+    CT_MSG_RECVD = 1 << 13,
+    IRIDIUM_MSG_RECVD = 1 << 14,
+    GNSS_CONFIG_REQUIRED = 1 << 15,
+    GNSS_MESSAGE_RECEIVED = 1 << 16,
+    
+    // GNSS timer flags
+    GNSS_INITIAL_RESOLUTION_STAGE = 1 << 17,
+    GNSS_WINDOW_PROCESSING_STAGE = 1 << 18
+} control_flags_t;
 
 typedef enum error_flags{
  	GNSS_ERROR = 1 << 1,
@@ -100,7 +104,8 @@ typedef enum error_flags{
 	RTC_ERROR = 1 << 8,
 	WATCHDOG_RESET = 1 << 9,
 	SOFTWARE_RESET = 1 << 10,
-	GNSS_RESOLUTION_ERROR = 1 << 11
+	GNSS_RESOLUTION_ERROR = 1 << 11,
+	EKF_ERROR = 1 << 12
 }error_flags_t;
 
 typedef enum led_sequence{

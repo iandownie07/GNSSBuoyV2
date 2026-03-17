@@ -86,6 +86,7 @@ typedef enum gnss_error_code{
 #define UBX_NAV_PVT_NUMSV_INDEX 23
 #define UBX_NAV_PVT_LON_INDEX 24
 #define UBX_NAV_PVT_LAT_INDEX 28
+#define UBX_NAV_PVT_HEIGHT_INDEX 32
 #define UBX_NAV_PVT_HACC_INDEX 40
 #define UBX_NAV_PVT_VACC_INDEX 44
 #define UBX_NAV_PVT_V_NORTH_INDEX 48
@@ -116,6 +117,11 @@ typedef struct GNSS {
 	float* GNSS_N_Array;
 	float* GNSS_E_Array;
 	float* GNSS_D_Array;
+	// Position converted to decimal degrees
+	double ref_lat;
+	double ref_lon;
+	double ref_height;
+	bool ref_initialized;
 	// Number of messages processed in a given buffer
 	int32_t messages_processed;
 	// Keep a running track of sum -- to be used in getRunningAverage
@@ -161,6 +167,7 @@ typedef struct GNSS {
 	gnss_error_code_t (*set_rtc)(struct GNSS* self, uint8_t* msg_payload);
 	gnss_error_code_t (*reset_uart)(struct GNSS* self, uint16_t baud_rate);
 	gnss_error_code_t (*reset_timer)(struct GNSS* self, uint8_t timeout_in_minutes);
+	uint32_t (*get_timestamp)(struct GNSS* self);
 } GNSS;
 
 /* Function declarations */
@@ -181,6 +188,7 @@ void			  gnss_cycle_power(GNSS* self);
 gnss_error_code_t gnss_set_rtc(GNSS* self, uint8_t* msg_payload);
 gnss_error_code_t gnss_reset_uart(GNSS* self, uint16_t baud_rate);
 gnss_error_code_t gnss_reset_timer(GNSS* self, uint8_t timeout_in_minutes);
+uint32_t 		  gnss_get_timestamp(GNSS* self);
 
 
 

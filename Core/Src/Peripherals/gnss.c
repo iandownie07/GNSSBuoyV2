@@ -17,8 +17,9 @@ static gnss_error_code_t stop_start_gnss(GNSS* self, bool send_stop);
 static void process__frame_sync_messages(GNSS* self, uint8_t* process_buf);
 static void get_checksum(uint8_t* ck_a, uint8_t* ck_b, uint8_t* buffer,
 		uint32_t num_bytes)__attribute__((unused));
-static uint32_t get_timestamp(GNSS* self)__attribute__((unused));
+//static uint32_t get_timestamp(GNSS* self)__attribute__((unused));
 static void reset_struct_fields(GNSS* self)__attribute__((unused));
+extern volatile uint32_t total_samples; 
 
 /**
  * Initialize the GNSS struct
@@ -55,6 +56,7 @@ void gnss_init(GNSS* self, microSWIFT_configuration* global_config,
 	self->set_rtc = gnss_set_rtc;
 	self->reset_uart = gnss_reset_uart;
 	self->reset_timer = gnss_reset_timer;
+	self->get_timestamp = gnss_get_timestamp;
 }
 
 /**
@@ -193,7 +195,7 @@ void gnss_process_message(GNSS* self)
 	int32_t message_class = 0;
 	int32_t message_id = 0;
 	int32_t num_payload_bytes = 0;
-	int32_t lat, lon, sAcc, vnorth, veast, vdown;
+	int32_t lat, lon, height, sAcc, vnorth, veast, vdown;
 	int8_t pDOP;
 	int16_t numSV;
 	bool is_ubx_nav_pvt_msg, velocities_exceed_max, sAcc_exceeded_max;
@@ -227,6 +229,7 @@ void gnss_process_message(GNSS* self)
 		// Grab a bunch of things from the message
 		lon 	= (int32_t) get_four_bytes(payload, UBX_NAV_PVT_LON_INDEX, AS_LITTLE_ENDIAN);
 		lat 	= (int32_t) get_four_bytes(payload, UBX_NAV_PVT_LAT_INDEX, AS_LITTLE_ENDIAN);
+		height 	= (int32_t) get_four_bytes(payload, UBX_NAV_PVT_HEIGHT_INDEX, AS_LITTLE_ENDIAN);
 		pDOP 	= (int16_t) get_two_bytes(payload, UBX_NAV_PVT_PDOP_INDEX, AS_LITTLE_ENDIAN);
 		sAcc 	= (int32_t) get_four_bytes(payload, UBX_NAV_PVT_SACC_INDEX, AS_LITTLE_ENDIAN);
 		vnorth 	= (int32_t) get_four_bytes(payload, UBX_NAV_PVT_V_NORTH_INDEX, AS_LITTLE_ENDIAN);
@@ -238,7 +241,7 @@ void gnss_process_message(GNSS* self)
 		//printf("PDOP %d\n", pDOP);
 		//printf("numSV %d\n", numSV);
 		//printf("sAcc %d\n", sAcc);
-		//printf("%ld\n", vnorth);
+		printf("%ld\n", vnorth);
 		//printf("%ld\n", veast);
 		//printf("%ld\n", vdown);
 		//for (int i = 7; i >= 0; i--) {
@@ -255,7 +258,6 @@ void gnss_process_message(GNSS* self)
         	.vel_down = vdown
     	};
 
-		UINT status;
     	// Send to queue (non-blocking to avoid blocking GNSS thread)
     	status = tx_queue_send(&gnss_to_ble_queue, &vel_msg, TX_NO_WAIT);
 		//printf("Queue send status: %d\n", status); // DEBUG
@@ -304,11 +306,12 @@ void gnss_process_message(GNSS* self)
 		sAcc_exceeded_max = sAcc > 2000;
 
 		// Did we have at least 1 good sample?
-		if ((self->total_samples == 0) && (!velocities_exceed_max) && (!sAcc_exceeded_max)) {
+		if ((total_samples == 0) && (!velocities_exceed_max) && (!sAcc_exceeded_max)) {
 			self->all_resolution_stages_complete = true;
-			self->sample_window_start_time = get_timestamp(self);
+			self->sample_window_start_time = self->get_timestamp(self);
 		}
 
+		/*
 		// Make sure we don't overflow our arrays
 		if (self->total_samples >= self->global_config->samples_per_window) {
 			HAL_UART_DMAStop(self->gnss_uart_handle);
@@ -318,7 +321,8 @@ void gnss_process_message(GNSS* self)
 					(((double)(self->sample_window_stop_time - self->sample_window_start_time))));
 			return;
 		}
-
+		*/
+	
 		// Check if the velocity values are any good
 		if (sAcc_exceeded_max | velocities_exceed_max) {
 			// This message was not within acceptable parameters,
@@ -333,15 +337,62 @@ void gnss_process_message(GNSS* self)
 		self->v_east_sum += veast;
 		self->v_down_sum += vdown;
 
+    // ═══════════════════════════════════════════════════════════════
+    // MODIFIED SECTION: Send to EKF instead of writing arrays directly
+    // ═══════════════════════════════════════════════════════════════
 
+	    #if EKF_ENABLED 
 
+		if (!self->ref_initialized && !velocities_exceed_max && !sAcc_exceeded_max) {
+    	self->ref_lat = (double)lat / 1e7;
+    	self->ref_lon = (double)lon / 1e7;
+    	self->ref_height = (double)height/MM_PER_METER;
+    	self->ref_initialized = true;
+    	printf("Reference position set: %.6f, %.6f\n", self->ref_lat, self->ref_lon);
+		}
+    
+    	// Convert LLA to NED (you'll need reference position)
+   		float pos_n, pos_e, pos_d;
+    	lla_to_ned((double)lat / 1e7, (double)lon / 1e7, (double)height/MM_PER_METER,  
+               self->ref_lat, self->ref_lon, self->ref_height,
+               &pos_n, &pos_e, &pos_d);
+    
+    	// Create GNSS message for EKF
+    	gnss_to_ekf_msg_t ekf_msg = {
+        	.pos_n = pos_n,
+        	.pos_e = pos_e,
+        	.pos_d = pos_d,
+        	.vel_north = (float)vnorth,  // mm/s
+        	.vel_east = (float)veast,
+        	.vel_down = (float)vdown,
+        	.valid = 1
+    	};
+    
+    	// Send to EKF queue (non-blocking)
+    	status = tx_queue_send(&gnss_to_ekf_queue, &ekf_msg, TX_NO_WAIT);
+    	if (status == TX_SUCCESS) {
+        	tx_event_flags_set(&ekf_events, GNSS_DATA_READY, TX_OR);
+    	} else {
+        	printf("GNSS->EKF queue error: %d\n", status);
+    	}
+    
+		// NOTE: EKF thread will:
+		// 1. Fuse IMU + GNSS data
+		// 2. Write to GNSS_N/E/D_Array at 5 Hz
+		// 3. Send to BLE queue
+		// We don't do those things here anymore
+    self->total_samples++;
+    #else
+    
+    // If EKF not enabled, keep old behavior
+    self->GNSS_N_Array[self->total_samples] = ((float)((float)vnorth)/MM_PER_METER);
+    self->GNSS_E_Array[self->total_samples] = ((float)((float)veast)/MM_PER_METER);
+    self->GNSS_D_Array[self->total_samples] = ((float)((float)vdown)/MM_PER_METER);
+    
+    #endif
 
-		self->GNSS_N_Array[self->total_samples] = ((float)((float)vnorth)/MM_PER_METER);
-		self->GNSS_E_Array[self->total_samples] = ((float)((float)veast)/MM_PER_METER);
-		self->GNSS_D_Array[self->total_samples] = ((float)((float)vdown)/MM_PER_METER);
 
 		self->number_cycles_without_data = 0;
-		self->total_samples++;
 		//printf("total samples: %d\n", self->total_samples);
 		buf_length -= buf_end - buf_start;
 		buf_start = buf_end;
@@ -797,7 +848,7 @@ static void get_checksum(uint8_t* ck_a, uint8_t* ck_b, uint8_t* buffer,
  * @param self - GNSS struct
  * @return timestamp as uint32_t
  */
-	static uint32_t get_timestamp(GNSS* self)
+	uint32_t gnss_get_timestamp(GNSS* self)
 	{
 		uint32_t timestamp = 0;
 		bool is_leap_year = false;
